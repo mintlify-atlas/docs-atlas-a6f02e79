@@ -1,0 +1,157 @@
+---
+title: "Solana wallet integration with Wallet Adapter"
+description: "Connect Solana wallets in PubKey UI Starter using SolanaProvider, WalletButton, WalletIcon, and the useAnchorProvider hook for on-chain interactions."
+---
+
+PubKey UI Starter integrates Solana wallets through the official `@solana/wallet-adapter-react` library combined with `@pubkeyapp/wallet-adapter-mantine-ui` for Mantine-styled modal and button components. The `SolanaProvider` component wires up the connection, wallet state, and modal in one place, and the `useAnchorProvider` hook exposes an Anchor-ready provider for interacting with on-chain programs.
+
+## SolanaProvider
+
+`SolanaProvider` lives in `web/src/app/features/solana/solana-provider.tsx` and composes three Wallet Adapter providers:
+
+```tsx solana-provider.tsx
+import { AnchorProvider } from '@coral-xyz/anchor'
+import { WalletModalProvider, WalletMultiButton, WalletMultiIcon } from '@pubkeyapp/wallet-adapter-mantine-ui'
+import { WalletError } from '@solana/wallet-adapter-base'
+import {
+  AnchorWallet,
+  ConnectionProvider,
+  useConnection,
+  useWallet,
+  WalletProvider,
+} from '@solana/wallet-adapter-react'
+
+import { ReactNode, useCallback, useMemo } from 'react'
+import { useCluster } from '../cluster/cluster-data-access'
+
+export const WalletButton = WalletMultiButton
+export const WalletIcon = WalletMultiIcon
+
+export function SolanaProvider({ children }: { children: ReactNode }) {
+  const { cluster } = useCluster()
+  const endpoint = useMemo(() => cluster.endpoint, [cluster])
+  const onError = useCallback((error: WalletError) => {
+    console.error(error)
+  }, [])
+
+  return (
+    <ConnectionProvider endpoint={endpoint}>
+      <WalletProvider wallets={[]} onError={onError} autoConnect={true}>
+        <WalletModalProvider>{children}</WalletModalProvider>
+      </WalletProvider>
+    </ConnectionProvider>
+  )
+}
+
+export function useAnchorProvider() {
+  const { connection } = useConnection()
+  const wallet = useWallet()
+
+  return new AnchorProvider(connection, wallet as AnchorWallet, { commitment: 'confirmed' })
+}
+```
+
+The three nested providers each own a distinct responsibility:
+
+| Provider | Role |
+|---|---|
+| `ConnectionProvider` | Creates and exposes the `Connection` object for the active cluster endpoint |
+| `WalletProvider` | Manages wallet selection, connection state, signing, and error handling |
+| `WalletModalProvider` | Renders the Mantine-styled wallet selection modal triggered by `WalletButton` / `WalletIcon` |
+
+### autoConnect and wallets
+
+`autoConnect={true}` reconnects the most recently used wallet automatically when the page loads, so returning users do not need to click through the modal again.
+
+`wallets={[]}` passes an empty array to `WalletProvider`. No wallets need to be registered explicitly because the library implements the [Wallet Standard](https://github.com/wallet-standard/wallet-standard) — any browser extension or mobile wallet that conforms to the standard is detected and listed automatically.
+
+<Note>
+  The wallet list is auto-detected via Wallet Standard. You do not need to import or register individual wallet adapters (e.g., `PhantomWalletAdapter`). Install adapters manually only if you need to support wallets that have not yet adopted Wallet Standard.
+</Note>
+
+## WalletButton and WalletIcon
+
+Two ready-to-use components are re-exported from `solana-provider.tsx`:
+
+```tsx
+export const WalletButton = WalletMultiButton
+export const WalletIcon = WalletMultiIcon
+```
+
+- **`WalletButton`** — A full-width button that shows the connected wallet's address (truncated) and opens the wallet modal when clicked. Use this in forms or onboarding flows.
+- **`WalletIcon`** — A compact icon-only variant. Used in the app header's profile slot for persistent, low-footprint wallet access.
+
+Both are sourced from `@pubkeyapp/wallet-adapter-mantine-ui` and are styled with Mantine tokens, so they automatically adapt to the active color scheme.
+
+`WalletIcon` is mounted in the header inside `AppRoutes`:
+
+```tsx app-routes.tsx
+import { WalletIcon } from './features/solana/solana-provider'
+
+<AppLayout
+  profile={
+    <Group>
+      <ClusterUiSelect />
+      <WalletIcon />
+      <UiThemeSwitch />
+    </Group>
+  }
+>
+```
+
+## Using wallet state in components
+
+Any component rendered inside `SolanaProvider` can access wallet and connection state through the standard hooks:
+
+```tsx
+import { useConnection, useWallet } from '@solana/wallet-adapter-react'
+
+export function MyComponent() {
+  const { connection } = useConnection()  // web3.js Connection to the active cluster
+  const { publicKey, sendTransaction, connected } = useWallet()
+
+  if (!connected) {
+    return <p>Connect your wallet to continue.</p>
+  }
+
+  return <p>Connected: {publicKey?.toBase58()}</p>
+}
+```
+
+- `useConnection()` returns the `Connection` object. Use it for `getBalance`, `getAccountInfo`, or any other RPC calls.
+- `useWallet()` returns the connected wallet's `publicKey`, `signTransaction`, `sendTransaction`, and connection status flags.
+
+## useAnchorProvider
+
+`useAnchorProvider` combines `useConnection` and `useWallet` into an `AnchorProvider` instance ready for use with Anchor program clients:
+
+```tsx
+export function useAnchorProvider() {
+  const { connection } = useConnection()
+  const wallet = useWallet()
+
+  return new AnchorProvider(connection, wallet as AnchorWallet, { commitment: 'confirmed' })
+}
+```
+
+The provider is configured with `commitment: 'confirmed'`, which waits for the transaction to be confirmed by a supermajority of validators before resolving — a reasonable default for most dApp interactions.
+
+<Tip>
+  Use `useAnchorProvider()` as the base for all Anchor program clients. Pass the returned provider to `new Program(IDL, programId, provider)` to get a fully typed client for your on-chain program.
+</Tip>
+
+Example usage in a program client hook:
+
+```tsx
+import { useAnchorProvider } from '../solana/solana-provider'
+import { Program } from '@coral-xyz/anchor'
+import { IDL, MyProgram } from '../idl/my-program'
+import { PublicKey } from '@solana/web3.js'
+
+const PROGRAM_ID = new PublicKey('YourProgramId11111111111111111111111111111111')
+
+export function useMyProgram() {
+  const provider = useAnchorProvider()
+  return new Program<MyProgram>(IDL, PROGRAM_ID, provider)
+}
+```

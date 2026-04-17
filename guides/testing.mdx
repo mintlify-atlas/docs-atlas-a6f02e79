@@ -1,0 +1,110 @@
+---
+title: "Testing with Jest, Babel, and React Testing Library"
+description: "PubKey UI Starter uses Jest for testing. The web project uses babel-jest with jsdom and the API uses ts-jest with a node environment for integration tests."
+---
+
+PubKey UI Starter ships with Jest configured for both the `api` and `web` projects. The monorepo uses a shared `jest.preset.js` at the root that wraps the Nx Jest preset, and each project provides its own `jest.config.ts` with environment-specific settings. The web project uses `babel-jest` with the `@nx/react/babel` preset, while the API project uses `ts-jest`.
+
+## Running tests
+
+### All projects
+
+```bash
+pnpm test
+```
+
+Runs `nx run-many --target=test --all`, executing Jest for every project in the monorepo in parallel.
+
+### Web tests only
+
+```bash
+pnpm nx run web:test
+```
+
+### API tests only
+
+```bash
+pnpm nx run api:test
+```
+
+<Tip>
+  Run tests in watch mode during development to get instant feedback as you edit:
+
+  ```bash
+  pnpm nx run web:test --watch
+  ```
+</Tip>
+
+## Test environments
+
+### Web project
+
+The web project (`web/jest.config.ts`) uses **`jest-environment-jsdom`** (provided by the Nx React preset) and transforms TypeScript and JSX files with `babel-jest` using the `@nx/react/babel` preset. This enables full DOM simulation and React component rendering via **`@testing-library/react`**.
+
+```typescript web/jest.config.ts
+export default {
+  displayName: 'web',
+  preset: '../jest.preset.js',
+  transform: {
+    '^(?!.*\\.(js|jsx|ts|tsx|css|json)$)': '@nx/react/plugins/jest',
+    '^.+\\.[tj]sx?$': ['babel-jest', { presets: ['@nx/react/babel'] }],
+  },
+  moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx'],
+  coverageDirectory: '../coverage/web',
+}
+```
+
+### API project
+
+The API project (`api/jest.config.ts`) uses **`jest-environment-node`** and transforms TypeScript with `ts-jest`, which respects the project's `tsconfig.spec.json`.
+
+```typescript api/jest.config.ts
+export default {
+  displayName: 'api',
+  preset: '../jest.preset.js',
+  testEnvironment: 'node',
+  transform: {
+    '^.+\\.[tj]s$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.spec.json' }],
+  },
+  moduleFileExtensions: ['ts', 'js', 'html'],
+  coverageDirectory: '../coverage/api',
+}
+```
+
+## Existing API spec
+
+The starter includes a smoke-test spec in `api/src/main.spec.ts` to confirm the test runner is wired up correctly:
+
+```typescript api/src/main.spec.ts
+describe('api', () => {
+  it('should work', () => {
+    expect(true).toBe(true)
+  })
+})
+```
+
+Replace or extend this with real integration tests for your Express routes.
+
+## File conventions
+
+| Pattern | Purpose |
+|---|---|
+| `*.spec.ts` | Unit tests co-located with TypeScript source files |
+| `*.spec.tsx` | React component tests co-located with component source |
+| `*.spec.js` / `*.spec.jsx` | JavaScript unit and component tests |
+
+The root `.eslintrc.json` sets `"env": { "jest": true }` for all `*.spec.*` files so that Jest globals (`describe`, `it`, `expect`, etc.) are recognised without explicit imports.
+
+## Coverage reports
+
+Coverage output is written to:
+
+- `coverage/web/` — web project coverage
+- `coverage/api/` — API project coverage
+
+To generate a coverage report, pass the `--coverage` flag:
+
+```bash
+pnpm nx run web:test --coverage
+pnpm nx run api:test --coverage
+```

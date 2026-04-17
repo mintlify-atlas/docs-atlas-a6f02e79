@@ -1,0 +1,205 @@
+---
+title: "Account dashboard: balances, tokens, and transactions"
+description: "View SOL balance, SPL token accounts (Token and Token-2022), and transaction history for any Solana wallet address using TanStack Query hooks."
+---
+
+The account feature provides a complete dashboard for any Solana wallet address. It fetches the SOL balance, all SPL token accounts (both the original Token program and the newer Token-2022 program), and recent transaction history — all through TanStack Query hooks that cache by RPC endpoint and public key. Users can also request airdrops on devnet or testnet and send SOL directly from the dashboard.
+
+## Data access hooks
+
+All hooks live in `account-data-access.tsx` and use `useConnection()` from `@solana/wallet-adapter-react` to get the active RPC connection. Query keys include the endpoint URL so that switching clusters automatically invalidates the cache.
+
+### `useGetBalance`
+
+```tsx
+import { useGetBalance } from './features/account/account-data-access'
+
+const query = useGetBalance({ address: publicKey })
+// query.data is the balance in lamports (number)
+```
+
+<ParamField path="address" type="PublicKey" required>
+  The wallet address to query. The query key is `['getBalance', { endpoint, address }]`.
+</ParamField>
+
+Calls `connection.getBalance(address)` and returns the balance in lamports. Divide by `LAMPORTS_PER_SOL` (1,000,000,000) to get SOL.
+
+### `useGetSignatures`
+
+```tsx
+const query = useGetSignatures({ address: publicKey })
+// query.data is ConfirmedSignatureInfo[]
+```
+
+<ParamField path="address" type="PublicKey" required>
+  The wallet address to query. The query key is `['getSignatures', { endpoint, address }]`.
+</ParamField>
+
+Calls `connection.getSignaturesForAddress(address)`. Returns an array of confirmed signature info objects including `signature`, `slot`, `blockTime`, and `err`.
+
+### `useGetTokenAccounts`
+
+```tsx
+const query = useGetTokenAccounts({ address: publicKey })
+// query.data is ParsedAccountData[] from both Token and Token-2022 programs
+```
+
+<ParamField path="address" type="PublicKey" required>
+  The wallet address to query. The query key is `['getTokenAccounts', { endpoint, address }]`.
+</ParamField>
+
+Fetches token accounts from both `TOKEN_PROGRAM_ID` and `TOKEN_2022_PROGRAM_ID` in parallel using `Promise.all`, then merges the results into a single array:
+
+```typescript
+async function getAllTokenAccounts(connection: Connection, address: PublicKey) {
+  const [tokenAccounts, token2022Accounts] = await Promise.all([
+    connection.getParsedTokenAccountsByOwner(address, { programId: TOKEN_PROGRAM_ID }),
+    connection.getParsedTokenAccountsByOwner(address, { programId: TOKEN_2022_PROGRAM_ID }),
+  ])
+  return [...tokenAccounts.value, ...token2022Accounts.value]
+}
+```
+
+### `useGetTokenBalance`
+
+```tsx
+const query = useGetTokenBalance({ address: tokenAccountPublicKey })
+// query.data.value.uiAmount is the human-readable balance
+```
+
+<ParamField path="address" type="PublicKey" required>
+  The **token account** public key (not the wallet address). The query key is `['getTokenBalance', { endpoint, account: address }]`.
+</ParamField>
+
+Calls `connection.getTokenAccountBalance(address)`. Used internally by `AccountTokenBalance` to display per-row balances in the token table.
+
+### `useRequestAirdrop`
+
+```tsx
+const mutation = useRequestAirdrop({ address: publicKey })
+
+mutation.mutateAsync('2') // request 2 SOL
+```
+
+<ParamField path="address" type="PublicKey" required>
+  The wallet address to fund. The mutation key is `['requestAirdrop', { endpoint, address }]`.
+</ParamField>
+
+Calls `requestAndConfirmAirdrop`, which requests the airdrop and then waits for confirmation using the latest blockhash. On success, it shows an explorer link toast and invalidates the balance and signatures queries. On error, it shows a `toastError` notification.
+
+<Note>
+  Airdrop is disabled on mainnet. The `ModalAirdrop` button receives `disabled={cluster.network?.includes('mainnet')}`, so it is automatically disabled when connected to `mainnet-beta`. Only request airdrops on devnet or testnet.
+</Note>
+
+### `useTransferSol`
+
+```tsx
+const mutation = useTransferSol({ address: senderPublicKey })
+
+mutation.mutateAsync({
+  destination: new PublicKey('recipient...'),
+  amount: '0.5',
+})
+```
+
+<ParamField path="address" type="PublicKey" required>
+  The sender's public key. This must match the connected wallet — the wallet's `sendTransaction` is used to sign.
+</ParamField>
+
+Builds and sends a `VersionedTransaction`. On success, shows an explorer link toast and invalidates balance and signature queries. See [Sending SOL and requesting airdrops](/solana/transactions) for the full transaction flow.
+
+## Cache invalidation
+
+After any successful transaction (airdrop or SOL transfer), `useOnTransactionSuccess` invalidates both the balance and signatures query caches for the address:
+
+```typescript
+function useOnTransactionSuccess({ address }: { address: PublicKey }) {
+  const { getExplorerUrl } = useCluster()
+  const client = useQueryClient()
+  const { getBalance, getSignatures } = useQueries({ address })
+
+  return (signature?: TransactionSignature) => {
+    if (signature) {
+      uiToastLink({ link: getExplorerUrl(`tx/${signature}`), label: 'View Transaction' })
+    }
+    return Promise.all([
+      client.invalidateQueries({ queryKey: getBalance.queryKey }),
+      client.invalidateQueries({ queryKey: getSignatures.queryKey }),
+    ])
+  }
+}
+```
+
+This means the balance display and transaction history both refresh automatically after every send or airdrop — no manual reload needed.
+
+## UI components
+
+### `AccountBalance`
+
+Displays the SOL balance as a large `Title`. Clicking the title calls `query.refetch()` to manually refresh.
+
+```tsx
+<AccountBalance order={2} address={address} />
+```
+
+Accepts all Mantine `TitleProps` in addition to `address`. Shows `...` while loading. Converts lamports to SOL with five decimal places of precision.
+
+### `AccountChecker`
+
+Reads the connected wallet from `useWallet()`. If the wallet has no balance on the current cluster, it shows a yellow `UiWarning` banner with a **Request Airdrop** button (requests 1 SOL). Returns `null` if no wallet is connected or if the balance is non-zero.
+
+```tsx
+<AccountChecker />
+```
+
+No props required — it uses the connected wallet's `publicKey` internally.
+
+### `AccountTokens`
+
+Table of all SPL token accounts owned by the address. Shows mint, token account public key, and balance. Displays the first 5 rows by default; a **Show All** / **Show Less** toggle appears when there are more than 5 accounts.
+
+```tsx
+<AccountTokens address={address} />
+```
+
+Both the mint and public key columns use `ExplorerLink` for direct solana.fm links.
+
+### `AccountTransactions`
+
+Table of recent transactions. Each row shows the signature (truncated, linked to solana.fm), slot (linked to the block explorer), block time (via `UiTime`), and a result badge (**Success** in green or **Failed** in red). Displays the first 5 rows with a **Show All** toggle for longer histories.
+
+```tsx
+<AccountTransactions address={address} />
+```
+
+### `AccountButtons`
+
+Renders three action buttons side by side: **Airdrop**, **Send**, and **Receive**. Each opens a Mantine modal.
+
+```tsx
+<AccountButtons address={address} />
+```
+
+- **Airdrop** is disabled when `cluster.network?.includes('mainnet')` is true.
+- **Send** is disabled when the connected wallet's `publicKey` does not match `address` (you can only send from your own wallet).
+- **Receive** shows your public key as copyable text.
+
+### `ellipsify`
+
+Utility function that truncates a string to show only the first and last `len` characters, separated by `..`:
+
+```typescript
+export function ellipsify(str = '', len = 4) {
+  if (str.length > 30) {
+    return str.substring(0, len) + '..' + str.substring(str.length - len, str.length)
+  }
+  return str
+}
+```
+
+```typescript
+ellipsify('GsbwXfJsJ1zPf6XSV3xbSmEuPdT7QqJdsMXPFDDEqKV3') // => 'Gsbw..KV3'
+ellipsify('GsbwXfJsJ1zPf6XSV3xbSmEuPdT7QqJdsMXPFDDEqKV3', 8) // => 'GsbwXfJs..DDEqKV3'
+```
+
+Strings shorter than 30 characters are returned unchanged. Used throughout account UI to keep public keys readable in tables.

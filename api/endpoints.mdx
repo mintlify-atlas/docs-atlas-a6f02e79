@@ -1,0 +1,86 @@
+---
+title: "API endpoints: GET /api and GET /api/uptime"
+description: "PubKey UI Starter exposes GET /api and GET /api/uptime endpoints. The uptime endpoint returns server process uptime in seconds as JSON."
+---
+
+The PubKey UI Starter API exposes two endpoints out of the box, both mounted under the `/api` prefix. They serve as a minimal working example of the routing system and as a health-check mechanism for deployments. All endpoints are unauthenticated and require no request body or query parameters unless noted.
+
+## Base URL
+
+| Environment | Base URL |
+|-------------|----------|
+| Local development | `http://localhost:3000` |
+
+All endpoints are prefixed with `/api`.
+
+---
+
+## GET /api
+
+Returns a plain-text string confirming the API is reachable.
+
+```text
+GET /api
+```
+
+**Response**
+
+<ResponseField name="body" type="string">
+  Plain text string `"PubKey API"`. No JSON wrapper.
+</ResponseField>
+
+---
+
+## GET /api/uptime
+
+Returns the number of seconds the server process has been running. Useful as a lightweight liveness check.
+
+```text
+GET /api/uptime
+```
+
+No authentication required. No request parameters.
+
+**Response**
+
+<ResponseField name="uptime" type="number" required>
+  Server process uptime in seconds, sourced from `process.uptime()`. The value is a floating-point number.
+</ResponseField>
+
+**Example response**
+
+```json
+{
+  "uptime": 42.156
+}
+```
+
+**Example request**
+
+```bash
+curl http://localhost:3000/api/uptime
+```
+
+The route handler in `api/src/lib/features/uptime.route.ts`:
+
+```typescript uptime.route.ts
+import { Request, Response } from 'express'
+
+export function uptimeRoute() {
+  return async (req: Request, res: Response) => {
+    const result = { uptime: process.uptime() }
+
+    return res.json(result)
+  }
+}
+```
+
+---
+
+## 404 handling
+
+Any request to a path that begins with `/api/` but does not match a registered route returns HTTP `404` with the plain-text body `"Not Found"`. This catch-all is registered last in `serverRouter()` via `router.use('*', ...)`.
+
+<Note>
+  These two endpoints are starter placeholders. Extend the API by adding route files in `api/src/lib/features/` and registering them in `api/src/lib/server-router.ts`. See the [overview](/api/overview) page for step-by-step instructions.
+</Note>

@@ -1,0 +1,95 @@
+---
+title: "Project structure and Nx monorepo layout"
+description: "Explore how PubKey UI Starter organizes its Nx monorepo with separate web and api projects, shared config, and the feature-based directory pattern."
+---
+
+PubKey UI Starter is an Nx monorepo containing two application projects: `web` (the React frontend) and `api` (the Express backend). Both projects share a root `package.json` for dependencies and a `tsconfig.base.json` for TypeScript configuration. Nx coordinates build, serve, lint, and test targets across both projects from a single workspace.
+
+## Directory tree
+
+```text
+pubkey-ui-starter/
+├── api/                         # Express API server
+│   └── src/
+│       ├── lib/
+│       │   ├── features/        # API route handlers
+│       │   ├── server.ts        # Express app setup
+│       │   ├── server-config.ts # Environment-based config
+│       │   └── server-router.ts # Mounts feature routers at /api
+│       └── main.ts              # Entry point — loads config and starts server
+├── web/                         # React frontend
+│   └── src/
+│       └── app/
+│           ├── features/        # Feature modules
+│           │   ├── account/     # SOL balance, tokens, transfers
+│           │   ├── cluster/     # Cluster switching and management
+│           │   ├── dashboard/   # Landing page feature
+│           │   └── solana/      # Wallet adapter provider
+│           ├── app.tsx          # Root component — providers tree
+│           ├── app-routes.tsx   # React Router route definitions
+│           └── app-layout.tsx   # Shell layout with header and navigation
+├── nx.json                      # Nx workspace config and target defaults
+├── package.json                 # Shared dependencies for all projects
+└── tsconfig.base.json           # Shared TypeScript path aliases
+```
+
+## Top-level sections
+
+**`api/`** contains the Express server. `main.ts` reads environment variables through `getServerConfig()`, then calls `server()` to create the Express app, register middleware, mount the `/api` router, and start listening. Static assets are served from `api/src/assets/`.
+
+**`web/`** contains the React application. `main.tsx` renders the app inside `BrowserRouter`. The root `App` component wraps the entire tree with `QueryClientProvider`, `UiThemeProvider`, `ClusterProvider`, and `SolanaProvider` before rendering `AppRoutes`.
+
+**`nx.json`** defines named inputs, Nx Cloud access, and target defaults. The `@nx/esbuild:esbuild` target is configured to cache builds and depend on upstream project builds.
+
+**`package.json`** declares all runtime and development dependencies for the entire workspace, including React, Mantine UI, Solana packages, TanStack Query, Jotai, Express, and all Nx plugins.
+
+**`tsconfig.base.json`** provides shared TypeScript compiler options and path aliases that both `web` and `api` extend.
+
+## Feature module pattern
+
+Each subdirectory inside `web/src/app/features/` represents a self-contained feature. Features are split into three file types:
+
+- **`<feature>-data-access.tsx`** — data fetching, Jotai atoms, and TanStack Query hooks. This is where RPC calls and wallet interactions live.
+- **`<feature>-feature.tsx`** — the routable page component. It composes UI components and connects them to data-access hooks.
+- **`<feature>-ui.tsx`** — presentational components that receive props and render Mantine UI elements. These have no direct dependency on Solana or query state.
+
+The `cluster` feature is a good example: `cluster-data-access.tsx` stores the active cluster in Jotai and manages the cluster list, `cluster-feature.tsx` is the `/clusters` page, and `cluster-ui.tsx` exports the `ClusterUiSelect` dropdown used in the app header.
+
+The same pattern applies to the API. Add a new directory under `api/src/lib/features/` with a route handler and register it in `server-router.ts`.
+
+## Nx commands
+
+Run these commands from the repository root:
+
+| Command | Description |
+|---|---|
+| `pnpm dev:api` | Start the Express API server in development mode (watch + reload) |
+| `pnpm dev:web` | Start the React app with the webpack dev server and HMR |
+| `pnpm build:api` | Build the API with esbuild, output to `dist/api/` |
+| `pnpm build:web` | Build the React app with webpack, output to `dist/web/` |
+| `pnpm lint` | Run ESLint across all projects with `nx run-many` |
+| `pnpm test` | Run Jest tests across all projects with `nx run-many` |
+
+You can also target a specific project directly using the Nx CLI:
+
+```bash
+pnpm nx run api:build
+pnpm nx run web:serve
+pnpm nx run api:docker-build
+```
+
+## Shared dependencies
+
+All npm packages are installed at the workspace root so both `web` and `api` can import them without duplication. Key shared runtime dependencies include:
+
+- **`react` / `react-dom`** — React 18.3
+- **`@mantine/core`** and related Mantine packages — UI component library v7
+- **`@solana/wallet-adapter-react`** and **`@solana/web3.js`** — Solana connectivity
+- **`@tanstack/react-query`** — server state management v5
+- **`jotai`** — global client state v2
+- **`express`** — API server v4
+- **`@coral-xyz/anchor`** — Anchor client for interacting with on-chain programs
+
+<Note>
+  Because all dependencies are hoisted to the root, you only need to run `pnpm install` once from the repository root. There are no nested `node_modules` directories inside `api/` or `web/`.
+</Note>

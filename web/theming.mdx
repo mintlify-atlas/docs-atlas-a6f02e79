@@ -1,0 +1,169 @@
+---
+title: "Theming and styling with Mantine UI and PubKey UI"
+description: "Customize the PubKey UI Starter's visual theme using Mantine UI v7's theme system, PostCSS preset, and the UiThemeProvider from @pubkey-ui/core."
+---
+
+PubKey UI Starter layers two theming systems: Mantine UI v7's `MantineProvider` handles component tokens, color schemes, and CSS variables, while `UiThemeProvider` from `@pubkey-ui/core` wraps that provider and adds PubKey-specific defaults, the dark/light mode switch, and the React Router link adapter. PostCSS transforms Mantine's utility classes at build time so responsive breakpoints work in `.css` and `.module.css` files.
+
+## UiThemeProvider
+
+`UiThemeProvider` from `@pubkey-ui/core` is the single theming entry point for the app. It wraps Mantine's `MantineProvider` internally and adds:
+
+- Sensible default theme overrides for a Solana dApp
+- A built-in color-scheme manager (dark / light / system)
+- A `link` prop that accepts a React Router `<Link>` adapter so all Mantine navigation components use client-side routing
+
+It is mounted near the root of the tree in `web/src/app/app.tsx`, directly around the cluster and wallet providers:
+
+```tsx app.tsx
+import { UiThemeProvider } from '@pubkey-ui/core'
+import '@pubkey-ui/core/index.esm.css'
+import { AppRoutes, ThemeLink } from './app-routes'
+
+export function App() {
+  return (
+    <QueryClientProvider client={client}>
+      <UiThemeProvider link={ThemeLink}>
+        <ClusterProvider>
+          <SolanaProvider>
+            <AppRoutes />
+          </SolanaProvider>
+        </ClusterProvider>
+      </UiThemeProvider>
+    </QueryClientProvider>
+  )
+}
+```
+
+## Dark / light mode toggle
+
+`UiThemeSwitch` from `@pubkey-ui/core` renders a compact icon button that cycles between light and dark color schemes. It is placed in the header's profile slot inside `AppRoutes`:
+
+```tsx app-routes.tsx
+import { UiThemeSwitch } from '@pubkey-ui/core'
+
+<AppLayout
+  links={links}
+  profile={
+    <Group>
+      <ClusterUiSelect />
+      <WalletIcon />
+      <UiThemeSwitch />
+    </Group>
+  }
+>
+```
+
+The selected scheme is persisted automatically by Mantine's color-scheme manager and restored on the next page load.
+
+## PostCSS setup
+
+Mantine v7 relies on PostCSS for responsive utility values. The configuration lives in `web/postcss.config.cjs`:
+
+```javascript postcss.config.cjs
+module.exports = {
+  plugins: {
+    'postcss-preset-mantine': {},
+    'postcss-simple-vars': {
+      variables: {
+        'mantine-breakpoint-xs': '36em',
+        'mantine-breakpoint-sm': '48em',
+        'mantine-breakpoint-md': '62em',
+        'mantine-breakpoint-lg': '75em',
+        'mantine-breakpoint-xl': '88em',
+      },
+    },
+  },
+}
+```
+
+- **`postcss-preset-mantine`** — enables Mantine's shorthand CSS functions (e.g., `light-dark()`, `rem()`, `em()`) inside `.css` and `.module.css` files.
+- **`postcss-simple-vars`** — exposes the breakpoint variables so you can use `$mantine-breakpoint-sm` in your own stylesheets to stay in sync with Mantine's responsive system.
+
+## CSS import
+
+The PubKey UI core stylesheet must be imported once at the application root. It is already present in `app.tsx`:
+
+```tsx
+import '@pubkey-ui/core/index.esm.css'
+```
+
+<Note>
+  Import `@pubkey-ui/core/index.esm.css` only once, at the app root. Importing it inside individual feature files will cause duplicate CSS and may produce visual glitches.
+</Note>
+
+## Global styles
+
+`web/src/styles.css` contains minimal global resets. The most important rule forces the app to fill the full viewport height and overrides Mantine's dark background token:
+
+```css styles.css
+html,
+body,
+#root {
+  height: 100%;
+}
+
+:root[data-mantine-color-scheme='dark'] {
+  --mantine-color-body: var(--mantine-color-dark-8) !important;
+}
+```
+
+Add any additional baseline resets or CSS custom properties here. Avoid adding component-specific styles — use Mantine's `styles` prop or CSS Modules for that.
+
+## ThemeLink adapter
+
+Mantine's `Anchor`, `NavLink`, and other navigation components use an `href` prop internally. React Router's `<Link>` uses `to`. The `ThemeLink` export in `app-routes.tsx` bridges the two:
+
+```tsx app-routes.tsx
+import { Link } from 'react-router-dom'
+import { UiThemeLink } from '@pubkey-ui/core'
+
+export const ThemeLink: UiThemeLink = ({ children, ...props }) => <Link {...props}>{children}</Link>
+```
+
+Passing `ThemeLink` to `UiThemeProvider` means every Mantine link component in the app performs a client-side navigation instead of a full page reload.
+
+## Mantine component customization
+
+All standard Mantine components from `@mantine/core` are available anywhere in the component tree once `UiThemeProvider` is mounted. No additional setup is required.
+
+```tsx
+import { Badge, Button, Text } from '@mantine/core'
+
+export function MyComponent() {
+  return (
+    <>
+      <Text size="lg" fw={600}>
+        Welcome to PubKey UI Starter
+      </Text>
+      <Badge color="violet" variant="filled">
+        Solana
+      </Badge>
+      <Button variant="gradient" gradient={{ from: 'violet', to: 'cyan' }}>
+        Connect Wallet
+      </Button>
+    </>
+  )
+}
+```
+
+To apply global component defaults — for example, setting every `Button` to `radius="md"` — pass a `theme` object to `UiThemeProvider`:
+
+```tsx
+<UiThemeProvider
+  link={ThemeLink}
+  theme={{
+    components: {
+      Button: {
+        defaultProps: {
+          radius: 'md',
+        },
+      },
+    },
+  }}
+>
+```
+
+<Tip>
+  The full Mantine component API, theme object shape, and CSS variable reference are documented at [mantine.dev](https://mantine.dev/). Every component in `@mantine/core` is usable without additional configuration.
+</Tip>

@@ -1,0 +1,126 @@
+---
+title: "API backend: Express server architecture and routing"
+description: "The PubKey UI Starter API is an Express server that serves a JSON REST API at /api, serves the built React app as static files, and supports Docker."
+---
+
+The PubKey UI Starter API is an Express application that lives in the `api/` project of the Nx monorepo. It handles two responsibilities: exposing a JSON REST API at the `/api` path, and serving the compiled React web app as static files. This co-location keeps the deployment simple — a single Node.js process serves both the front end and the back end.
+
+## Architecture
+
+The server is assembled from three focused modules:
+
+- **`server.ts`** — creates the Express app, wires up middleware, mounts routes, and starts listening
+- **`server-config.ts`** — reads configuration from environment variables
+- **`server-router.ts`** — defines all `/api` route handlers
+
+The Express app applies middleware in this order:
+
+1. Favicon served from `assets/favicon.ico`
+2. JSON body parsing via `express.json()`
+3. API routes mounted at `/api` via `serverRouter()`
+4. Static files served from `assets/` (the built React app)
+
+## Server entry point
+
+`main.ts` loads `.env`, builds the config, and calls `server()`:
+
+```typescript main.ts
+import * as dotenv from 'dotenv'
+import { server } from './lib/server'
+import { getServerConfig, ServerConfig } from './lib/server-config'
+
+dotenv.config()
+
+const config: ServerConfig = getServerConfig()
+
+server(config).catch((e) => console.error(`An error occurred:`, e))
+```
+
+`server.ts` wires up the Express app:
+
+```typescript server.ts
+import express from 'express'
+import { existsSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import favicon from 'serve-favicon'
+import { ServerConfig } from './server-config'
+import { serverRouter } from './server-router'
+
+const dir = dirname(import.meta.url).replace('file://', '')
+
+export async function server(config: ServerConfig) {
+  const app = express()
+  app.use(favicon(join(dir, 'assets', 'favicon.ico')))
+  app.use(express.json())
+  app.use('/api', serverRouter())
+  const staticPath = setupAssets(app, dir)
+
+  app.listen(Number(config.port), config.host).on('listening', async () => {
+    console.log(`🅿️  Listening on ${config.apiUrl}`)
+    console.log(`📁 Serving static files from ${staticPath}`)
+  })
+}
+```
+
+## API router
+
+`serverRouter()` returns an Express `Router` with all `/api` sub-routes registered:
+
+```typescript server-router.ts
+import express, { Request, Response } from 'express'
+import { uptimeRoute } from './features/uptime.route'
+
+export function serverRouter(): express.Router {
+  const router = express.Router()
+
+  router.use('/uptime', uptimeRoute())
+  router.use('/', (req: Request, res: Response) => res.send('PubKey API'))
+  router.use('*', (req: Request, res: Response) => res.status(404).send('Not Found'))
+
+  return router
+}
+```
+
+The routes registered out of the box are:
+
+| Method | Path | Response |
+|--------|------|----------|
+| `GET` | `/api/uptime` | `{ "uptime": <seconds> }` |
+| `GET` | `/api` | `"PubKey API"` (plain text) |
+| `*` | `/api/*` | `404 Not Found` |
+
+## Adding a new API route
+
+<Steps>
+  <Step title="Create a feature route file">
+    Add a new file at `api/src/lib/features/my-feature.route.ts`. Export a function that returns an Express router or handler:
+
+    ```typescript api/src/lib/features/my-feature.route.ts
+    import { Request, Response } from 'express'
+
+    export function myFeatureRoute() {
+      return async (req: Request, res: Response) => {
+        return res.json({ message: 'Hello from my feature' })
+      }
+    }
+    ```
+  </Step>
+  <Step title="Import the route in server-router.ts">
+    Open `api/src/lib/server-router.ts` and import your new function:
+
+    ```typescript
+    import { myFeatureRoute } from './features/my-feature.route'
+    ```
+  </Step>
+  <Step title="Register the route on the router">
+    Mount it before the catch-all `'*'` handler so requests reach it:
+
+    ```typescript
+    router.use('/my-feature', myFeatureRoute())
+    ```
+  </Step>
+</Steps>
+
+<Tip>
+  The static assets path is validated at startup. If `assets/` does not exist (i.e., the web app has not been built yet), the server logs an error and calls `process.exit(1)`. Run `nx run web:build` before starting the API in production to ensure the directory is present.
+</Tip>

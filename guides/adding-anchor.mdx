@@ -1,0 +1,103 @@
+---
+title: "Add Anchor programs with create-solana-dapp"
+description: "Extend PubKey UI Starter with Solana Anchor programs using the @solana-developers/preset-anchor generator from create-solana-dapp."
+---
+
+PubKey UI Starter is compatible with the generators from [create-solana-dapp](https://npm.im/create-solana-dapp), which means you can add Solana smart contracts to your project using the same Nx workspace you already have — without ejecting or restructuring your monorepo. The `@solana-developers/preset-anchor` package provides Nx generators for scaffolding Anchor applications and program templates.
+
+## What is Anchor?
+
+Anchor is a Rust-based framework for writing Solana smart contracts (programs). It handles account serialization, instruction routing, and client-side IDL generation, letting you focus on program logic rather than low-level Solana mechanics.
+
+## Prerequisites
+
+Before adding Anchor programs, install the Anchor CLI and the Rust toolchain. Follow the setup instructions in the [Anchor documentation](https://www.anchor-lang.com/docs/installation).
+
+## Step 1: Install the preset
+
+Add the Anchor preset as a dev dependency:
+
+```bash
+pnpm add -D @solana-developers/preset-anchor
+```
+
+## Step 2: Generate the Anchor application
+
+Run the Nx generator with `--dry-run` first to preview the files that will be created:
+
+```bash
+pnpm nx generate @solana-developers/preset-anchor:application anchor --dry-run
+```
+
+<Note>
+  `--dry-run` shows the files that would be generated without writing anything to disk. Review the output, then remove `--dry-run` to apply the changes.
+</Note>
+
+Once you're satisfied with the output, apply the generator:
+
+```bash
+pnpm nx generate @solana-developers/preset-anchor:application anchor
+```
+
+## Step 3: Add a program template
+
+The preset includes built-in program templates. The `counter` template is a good starting point — it demonstrates how to store and increment on-chain state.
+
+Preview the generated files first:
+
+```bash
+pnpm nx generate @solana-developers/preset-anchor:template \
+  --projectName anchor \
+  --directory anchor \
+  --template counter counter \
+  --dry-run
+```
+
+Apply when ready:
+
+```bash
+pnpm nx generate @solana-developers/preset-anchor:template \
+  --projectName anchor \
+  --directory anchor \
+  --template counter counter
+```
+
+<Tip>
+  After generating the program, compile it with:
+
+  ```bash
+  pnpm nx run anchor:build
+  ```
+
+  This invokes the Anchor build toolchain and produces the program binary and IDL.
+</Tip>
+
+## Step 4: Connect to your Anchor program from React
+
+PubKey UI Starter already includes the `@coral-xyz/anchor` package and exposes a `useAnchorProvider()` hook from `web/src/app/features/solana/solana-provider.tsx`. This hook returns an `AnchorProvider` wired to the active wallet and cluster connection — everything you need to instantiate a typed Anchor program client.
+
+```tsx
+import { useAnchorProvider } from '../features/solana/solana-provider'
+
+function MyComponent() {
+  const provider = useAnchorProvider()
+  // use provider with your Anchor program client
+}
+```
+
+The hook reads the current cluster endpoint from the cluster context and the connected wallet from the Solana wallet adapter, so it automatically updates when the user switches clusters or wallets.
+
+### Full hook source
+
+For reference, here is the implementation in `web/src/app/features/solana/solana-provider.tsx`:
+
+```tsx
+export function useAnchorProvider() {
+  const { connection } = useConnection()
+  const wallet = useWallet()
+
+  return new AnchorProvider(connection, wallet as AnchorWallet, { commitment: 'confirmed' })
+}
+```
+
+Pass the returned `provider` to your generated program client (e.g., `new Program(idl, provider)`) to start reading from and writing to your on-chain program.

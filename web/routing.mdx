@@ -1,0 +1,179 @@
+---
+title: "React Router v6 routing: pages, lazy loading, and layout"
+description: "PubKey UI Starter uses React Router v6 with lazy-loaded routes for dashboard, account list, account detail, and cluster management pages."
+---
+
+PubKey UI Starter uses React Router v6's `useRoutes` hook to declare all client-side routes in a single array. Three of those routes are code-split with `React.lazy()` so the initial JavaScript bundle stays small, while the dashboard is eagerly loaded because it is the default landing page.
+
+## Route definitions
+
+The full routes array lives in `web/src/app/app-routes.tsx`:
+
+```tsx app-routes.tsx
+import { Group } from '@mantine/core'
+import { UiHeaderLink, UiNotFound, UiThemeLink, UiThemeSwitch } from '@pubkey-ui/core'
+import { lazy } from 'react'
+import { Link, Navigate, RouteObject, useRoutes } from 'react-router-dom'
+import { AppLayout } from './app-layout'
+import { ClusterUiSelect } from './features/cluster/cluster-ui'
+import { DashboardFeature } from './features/dashboard/dashboard-feature'
+import { WalletIcon } from './features/solana/solana-provider'
+
+const AccountList = lazy(() => import('./features/account/account-feature-list'))
+const AccountDetail = lazy(() => import('./features/account/account-feature-detail'))
+const ClusterFeature = lazy(() => import('./features/cluster/cluster-feature'))
+
+const links: UiHeaderLink[] = [
+  { label: 'Dashboard', link: '/dashboard' },
+  { label: 'Account', link: '/account' },
+  { label: 'Clusters', link: '/clusters' },
+]
+
+const routes: RouteObject[] = [
+  { path: '/', element: <Navigate to="/dashboard" replace /> },
+  { path: '/account', element: <AccountList /> },
+  { path: '/account/:address', element: <AccountDetail /> },
+  { path: '/clusters', element: <ClusterFeature /> },
+  { path: '/dashboard', element: <DashboardFeature /> },
+  { path: '*', element: <UiNotFound /> },
+]
+
+export function AppRoutes() {
+  const router = useRoutes(routes)
+
+  return (
+    <AppLayout
+      links={links}
+      profile={
+        <Group>
+          <ClusterUiSelect />
+          <WalletIcon />
+          <UiThemeSwitch />
+        </Group>
+      }
+    >
+      {router}
+    </AppLayout>
+  )
+}
+
+export const ThemeLink: UiThemeLink = ({ children, ...props }) => <Link {...props}>{children}</Link>
+```
+
+## Route reference
+
+| Path | Component | Loading |
+|---|---|---|
+| `/` | Redirect to `/dashboard` | — |
+| `/dashboard` | `DashboardFeature` | Eager |
+| `/account` | `AccountList` | Lazy |
+| `/account/:address` | `AccountDetail` | Lazy |
+| `/clusters` | `ClusterFeature` | Lazy |
+| `*` | `UiNotFound` | Eager |
+
+- **`/`** — A `<Navigate replace>` redirect so the root URL immediately sends the browser to `/dashboard` without adding a history entry.
+- **`/dashboard`** — The default landing page. Eagerly imported so it renders without any additional chunk fetch.
+- **`/account`** — Displays a list of accounts associated with the connected wallet. Shows a connect-wallet prompt when no wallet is connected.
+- **`/account/:address`** — Shows the balance, token holdings, and transaction history for the public key in the `:address` URL segment.
+- **`/clusters`** — Lets users add, edit, and switch between Solana clusters (Mainnet, Devnet, Localnet, or a custom RPC endpoint).
+- **`*`** — Catches all unmatched paths and renders the `UiNotFound` page from `@pubkey-ui/core`.
+
+## Lazy loading
+
+Routes are split with `React.lazy()` and a dynamic `import()`. React suspends rendering the matched route until the chunk is downloaded, then replaces the fallback with the real component.
+
+```tsx
+const AccountList = lazy(() => import('./features/account/account-feature-list'))
+const AccountDetail = lazy(() => import('./features/account/account-feature-detail'))
+const ClusterFeature = lazy(() => import('./features/cluster/cluster-feature'))
+```
+
+This keeps the initial bundle limited to the dashboard, the provider tree, and shared UI. Each lazy chunk is only downloaded when the user first navigates to that route.
+
+## AppLayout wrapper
+
+`AppLayout` in `web/src/app/app-layout.tsx` wraps every route with the shared header and cluster/account health checks:
+
+```tsx app-layout.tsx
+import { useDisclosure } from '@mantine/hooks'
+import { UiHeader, UiHeaderLink, UiLayout } from '@pubkey-ui/core'
+import { ReactNode } from 'react'
+import { AccountChecker } from './features/account/account-ui'
+import { ClusterChecker } from './features/cluster/cluster-ui'
+
+export function AppLayout({
+  children,
+  links,
+  profile,
+}: {
+  children: ReactNode
+  links: UiHeaderLink[]
+  profile: ReactNode
+}) {
+  const [opened, { toggle }] = useDisclosure(false)
+  return (
+    <UiLayout header={<UiHeader opened={opened} toggle={toggle} links={links} profile={profile} />}>
+      <ClusterChecker>
+        <AccountChecker />
+      </ClusterChecker>
+      {children}
+    </UiLayout>
+  )
+}
+```
+
+`ClusterChecker` warns the user when the active cluster is unreachable. `AccountChecker` prompts the user to request an airdrop when their wallet has zero balance on the active cluster.
+
+The header's right-hand `profile` slot contains three controls passed in from `AppRoutes`:
+
+- `ClusterUiSelect` — dropdown to switch between clusters
+- `WalletIcon` — connects/disconnects the Solana wallet
+- `UiThemeSwitch` — toggles dark and light mode
+
+## ThemeLink adapter
+
+Mantine's internal link components expect an `href` prop. React Router uses `to`. The `ThemeLink` export adapts React Router's `<Link>` to the interface `UiThemeProvider` expects:
+
+```tsx
+export const ThemeLink: UiThemeLink = ({ children, ...props }) => <Link {...props}>{children}</Link>
+```
+
+It is passed to `UiThemeProvider` in `app.tsx` so that all Mantine navigation components (such as `NavLink` and `Anchor`) trigger client-side transitions instead of full page reloads.
+
+## Adding a new route
+
+<Steps>
+  <Step title="Create the feature file">
+    Add your page component under `web/src/app/features/<feature-name>/<feature-name>-feature.tsx`. Export it as a default export so `React.lazy()` can import it.
+
+    ```tsx my-feature-feature.tsx
+    export default function MyFeature() {
+      return <div>My feature</div>
+    }
+    ```
+  </Step>
+  <Step title="Add the route to the routes array">
+    Open `web/src/app/app-routes.tsx`. Declare a lazy import and push a new entry into the `routes` array.
+
+    ```tsx
+    const MyFeature = lazy(() => import('./features/my-feature/my-feature-feature'))
+
+    const routes: RouteObject[] = [
+      // ...existing routes
+      { path: '/my-feature', element: <MyFeature /> },
+    ]
+    ```
+  </Step>
+  <Step title="Add a link to the nav links array">
+    Add an entry to the `links` array in the same file so the header navigation includes your new page.
+
+    ```tsx
+    const links: UiHeaderLink[] = [
+      { label: 'Dashboard', link: '/dashboard' },
+      { label: 'Account', link: '/account' },
+      { label: 'Clusters', link: '/clusters' },
+      { label: 'My Feature', link: '/my-feature' },
+    ]
+    ```
+  </Step>
+</Steps>

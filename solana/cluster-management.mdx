@@ -1,0 +1,166 @@
+---
+title: "Cluster management: switch Solana RPC networks"
+description: "Manage and switch between Solana clusters (devnet, testnet, localnet, custom RPC) using ClusterProvider, useCluster, and Jotai persistent state."
+---
+
+Cluster management lets your dApp connect to different Solana RPC networks — devnet for development, testnet for pre-production, your local validator for offline work, or any custom endpoint you provide. The cluster system in PubKey UI Starter is built on Jotai atoms with persistent storage, so the user's cluster selection survives a page refresh without any extra configuration.
+
+## Default clusters
+
+The starter ships with three pre-configured clusters defined in `cluster-data-access.tsx`:
+
+```typescript
+export const defaultClusters: Cluster[] = [
+  {
+    name: 'devnet',
+    endpoint: clusterApiUrl('devnet'),
+    network: ClusterNetwork.Devnet,
+  },
+  { name: 'local', endpoint: 'http://localhost:8899' },
+  {
+    name: 'testnet',
+    endpoint: clusterApiUrl('testnet'),
+    network: ClusterNetwork.Testnet,
+  },
+]
+```
+
+The `local` cluster has no `network` value, which causes `getClusterUrlParam` to treat it as a localnet entry when constructing explorer URLs.
+
+## `ClusterNetwork` enum
+
+```typescript
+export enum ClusterNetwork {
+  Mainnet = 'mainnet-beta',
+  Testnet = 'testnet',
+  Devnet = 'devnet',
+  Custom = 'custom',
+}
+```
+
+The `network` field on a `Cluster` object is optional. When it is absent (as with the `local` cluster), explorer links append the `localnet-solana` cluster parameter and include the custom RPC URL.
+
+## `Cluster` interface
+
+```typescript
+interface Cluster {
+  name: string
+  endpoint: string
+  network?: ClusterNetwork
+  active?: boolean
+}
+```
+
+The `active` field is computed — it is not stored directly. `ClusterProvider` derives it by comparing each cluster's `name` against the currently selected cluster atom.
+
+## State persistence
+
+Cluster state is stored in `localStorage` using `atomWithStorage` from `jotai/utils`. Two atoms are persisted:
+
+- `solana-cluster` — the currently active `Cluster` object
+- `solana-clusters` — the full list of `Cluster` objects (including any custom clusters the user has added)
+
+```typescript
+const clusterAtom = atomWithStorage<Cluster>('solana-cluster', defaultClusters[0])
+const clustersAtom = atomWithStorage<Cluster[]>('solana-clusters', defaultClusters)
+```
+
+Because these atoms write to `localStorage`, the user's selected cluster and any custom clusters they have added persist across page reloads.
+
+## `ClusterProvider` and `useCluster()`
+
+Wrap your app in `ClusterProvider` to make cluster state available throughout the component tree. Access it anywhere with the `useCluster()` hook.
+
+```tsx
+import { ClusterProvider, useCluster } from './features/cluster/cluster-data-access'
+
+function App() {
+  return (
+    <ClusterProvider>
+      <YourApp />
+    </ClusterProvider>
+  )
+}
+```
+
+### Hook API
+
+<ParamField path="cluster" type="Cluster">
+  The currently active cluster object. Includes `name`, `endpoint`, `network`, and a computed `active: true` flag.
+</ParamField>
+
+<ParamField path="clusters" type="Cluster[]">
+  All registered clusters sorted alphabetically by name. Each item has `active: true` on the currently selected cluster.
+</ParamField>
+
+<ParamField path="addCluster" type="(cluster: Cluster) => void">
+  Appends a new cluster to the list. The cluster is immediately available in the UI and is persisted to `localStorage`.
+</ParamField>
+
+<ParamField path="deleteCluster" type="(cluster: Cluster) => void">
+  Removes a cluster from the list by name. You cannot delete the currently active cluster (the delete button is disabled when `item.active` is true).
+</ParamField>
+
+<ParamField path="setCluster" type="(cluster: Cluster) => void">
+  Switches the active cluster. Updates the `solana-cluster` atom in `localStorage`.
+</ParamField>
+
+<ParamField path="getExplorerUrl" type="(path: string) => string">
+  Returns a solana.fm URL for the given path, with the correct `?cluster=` query parameter appended based on the active cluster's network.
+</ParamField>
+
+### `getExplorerUrl` usage
+
+```tsx
+const { getExplorerUrl } = useCluster()
+
+// Link to a transaction on the active cluster
+const txUrl = getExplorerUrl('tx/5KtP...abc')
+// => https://solana.fm/tx/5KtP...abc?cluster=devnet-solana
+
+// Link to an account
+const accountUrl = getExplorerUrl('account/GsbwXfJ...')
+// => https://solana.fm/account/GsbwXfJ...?cluster=devnet-solana
+```
+
+The cluster URL parameters map as follows:
+
+| Network | `?cluster=` value |
+|---|---|
+| `devnet` | `devnet-solana` |
+| `mainnet-beta` | `mainnet-solana` |
+| `testnet` | `testnet-solana` |
+| `custom` / none | `localnet-solana&customUrl=<encoded endpoint>` |
+
+## UI components
+
+<CardGroup cols={2}>
+  <Card title="ClusterUiSelect" icon="chevrons-up-down">
+    Dropdown button in the app header. Displays the active cluster name and lets the user switch clusters with a single click. Includes a **Manage Clusters** link to `/clusters`.
+  </Card>
+  <Card title="ClusterUiTable" icon="table">
+    Table listing all registered clusters. Each row shows the cluster name, network, and endpoint. Inactive clusters are clickable links that call `setCluster`. Active clusters have a disabled delete button.
+  </Card>
+  <Card title="ClusterUiModal" icon="circle-plus">
+    Modal form with fields for name, endpoint, and network. Calls `addCluster` on save. Opened by the **Add Cluster** button on the `/clusters` page.
+  </Card>
+  <Card title="ClusterChecker" icon="wifi">
+    Wraps page content and calls `connection.getVersion()` on mount. If the RPC is unreachable, it replaces the children with a `UiWarning` banner and a **Refresh** button. Returns `null` while loading.
+  </Card>
+</CardGroup>
+
+### `ExplorerLink`
+
+`ExplorerLink` is a convenience component that combines `getExplorerUrl` with a Mantine `Anchor`:
+
+```tsx
+import { ExplorerLink } from './features/cluster/cluster-ui'
+
+<ExplorerLink path={`account/${address}`} label={ellipsify(address.toString())} />
+```
+
+It opens in a new tab with `rel="noopener noreferrer"`. Any additional `AnchorProps` are forwarded to the underlying `Anchor`.
+
+<Tip>
+  Set your cluster to **local** and run `solana-test-validator` to test against a local validator at `http://localhost:8899`. The explorer link will automatically include `localnet-solana&customUrl=http%3A%2F%2Flocalhost%3A8899` so solana.fm points to your local node.
+</Tip>

@@ -1,0 +1,102 @@
+---
+title: "Local development workflow and Nx commands"
+description: "Run, build, lint, and test the PubKey UI Starter monorepo locally using pnpm scripts and Nx. Covers dev servers, hot reload, and the proxy configuration."
+---
+
+PubKey UI Starter is an Nx monorepo containing two applications: an Express API (`api`) and a React web app (`web`). During development you run both servers concurrently — the webpack dev server for the React frontend and the Node.js server for the Express backend — then rely on the built-in proxy to route API calls between them.
+
+## Prerequisites
+
+Before you start, make sure you have the following installed:
+
+- **Node.js** v20 or higher
+- **PNPM** v8 or higher
+
+<Tip>
+  If you don't have PNPM installed, enable it with Corepack:
+
+  ```bash
+  corepack enable
+  corepack prepare pnpm@8 --activate
+  ```
+</Tip>
+
+## Development servers
+
+Start the API and web servers in separate terminal windows.
+
+### API server
+
+```bash
+pnpm dev:api
+```
+
+Runs `nx run api:serve`, which starts the Express server on **port 3000** using the `@nx/js:node` executor. The server recompiles automatically when source files change.
+
+### Web app
+
+```bash
+pnpm dev:web
+```
+
+Runs `nx run web:serve`, which starts the webpack dev server with **hot module replacement (HMR)** enabled. The dev server is configured in `web/project.json` with `"hmr": true`.
+
+### Proxy configuration
+
+The webpack dev server proxies all requests to `/api` through to `http://localhost:3000` so that your React app can call the Express API without cross-origin issues. This is configured in `web/proxy.conf.json`:
+
+```json web/proxy.conf.json
+[
+  {
+    "context": ["/api"],
+    "target": "http://localhost:3000",
+    "secure": false
+  }
+]
+```
+
+## Build commands
+
+### Build the API
+
+```bash
+pnpm build:api
+```
+
+Runs `nx run api:build`. The API is compiled with **esbuild** (via `@nx/esbuild:esbuild`) and output to `dist/api/`.
+
+### Build the web app
+
+```bash
+pnpm build:web
+```
+
+Runs `nx run web:build`. The React app is bundled with **webpack** and output to `dist/web/`.
+
+## Lint
+
+```bash
+pnpm lint
+```
+
+Runs `nx run-many --target=lint --all`, which executes ESLint across both the `api` and `web` projects in parallel. The root `.eslintrc.json` enforces Nx module boundary rules along with TypeScript and JavaScript linting via `@nx/typescript` and `@nx/javascript`.
+
+## Test
+
+```bash
+pnpm test
+```
+
+Runs `nx run-many --target=test --all`, which runs Jest across all projects. See [Testing](/guides/testing) for the full testing setup.
+
+## Nx build caching
+
+<Tip>
+  Nx caches the output of the `@nx/esbuild:esbuild` target by default (configured in `nx.json` under `targetDefaults`). If source files haven't changed, Nx replays the cached build output instead of recompiling. To force a fresh build, add `--skip-nx-cache`.
+</Tip>
+
+## TypeScript configuration
+
+<Note>
+  The root `tsconfig.base.json` is the shared TypeScript configuration for the entire monorepo. It sets `"moduleResolution": "node"`, `"target": "es2015"`, and `"module": "esnext"`. Each project (`api/tsconfig.app.json`, `web/tsconfig.app.json`) extends from this base and adds project-specific overrides.
+</Note>

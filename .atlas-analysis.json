@@ -1,0 +1,86 @@
+{
+  "projectType": "frontend",
+  "projectName": "PubKey UI Starter",
+  "projectDescription": "A full-stack Solana dApp starter built with React, Mantine UI, Solana Wallet Adapter, TanStack Query, Jotai, React Router, and an Express API backend — powered by Nx monorepo tooling.",
+  "theme": "luma",
+  "primaryColor": "#1d7cd4",
+  "lightColor": "#89bcec",
+  "darkColor": null,
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "project-structure"
+            ]
+          },
+          {
+            "group": "Web App",
+            "pages": [
+              "web/overview",
+              "web/routing",
+              "web/theming",
+              "web/wallet-integration"
+            ]
+          },
+          {
+            "group": "Solana Features",
+            "pages": [
+              "solana/cluster-management",
+              "solana/account",
+              "solana/transactions"
+            ]
+          },
+          {
+            "group": "API Backend",
+            "pages": [
+              "api/overview",
+              "api/configuration",
+              "api/endpoints"
+            ]
+          },
+          {
+            "group": "Development & Deployment",
+            "pages": [
+              "guides/development",
+              "guides/testing",
+              "guides/deployment",
+              "guides/adding-anchor"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "React 18 frontend with Mantine UI v7 component library",
+    "Solana Wallet Adapter integration with multi-wallet support",
+    "Cluster management (devnet, testnet, localnet, custom RPC)",
+    "Account dashboard: SOL balance, token accounts, transaction history",
+    "TanStack Query for data fetching and cache management",
+    "Jotai atoms with localStorage persistence for cluster state",
+    "Express API backend with uptime endpoint and static file serving",
+    "Nx monorepo with separate web and api projects",
+    "Docker support for API deployment",
+    "Compatible with create-solana-dapp Anchor generators"
+  ],
+  "publicApiSurface": [
+    "useCluster() — access active cluster, switch clusters, get explorer URLs",
+    "ClusterProvider — context provider for Solana cluster state",
+    "SolanaProvider — wraps ConnectionProvider, WalletProvider, WalletModalProvider",
+    "useAnchorProvider() — returns an AnchorProvider for on-chain program interactions",
+    "useGetBalance({ address }) — query SOL balance for a public key",
+    "useGetSignatures({ address }) — query transaction signatures for a public key",
+    "useGetTokenAccounts({ address }) — query SPL token accounts (Token + Token-2022)",
+    "useRequestAirdrop({ address }) — mutation to request devnet/testnet SOL airdrop",
+    "useTransferSol({ address }) — mutation to send SOL to another address",
+    "GET /api/uptime — returns server uptime in seconds",
+    "pnpm dev:web / pnpm dev:api — start development servers",
+    "pnpm build:web / pnpm build:api — build for production"
+  ]
+}

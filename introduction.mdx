@@ -1,0 +1,71 @@
+---
+title: "PubKey UI Starter: Solana dApp scaffold overview"
+description: "PubKey UI Starter is a Solana dApp scaffold combining React 18, Mantine UI v7, Wallet Adapter, TanStack Query, Jotai, and an Express API."
+---
+
+PubKey UI Starter is a full-stack scaffold for building Solana decentralized applications. It removes the wiring work — wallet connectivity, cluster switching, state management, API server, and build tooling — so you can focus on writing product features from day one.
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Clone, install, and run your first Solana dApp locally in under five minutes.
+  </Card>
+  <Card title="Project structure" icon="folder-tree" href="/project-structure">
+    Understand how the Nx monorepo organizes the web app and API server.
+  </Card>
+  <Card title="Web app overview" icon="browser" href="/web/overview">
+    React 18, Mantine UI v7, React Router, TanStack Query, and Jotai explained.
+  </Card>
+  <Card title="Cluster management" icon="network-wired" href="/solana/cluster-management">
+    Switch between devnet, testnet, localnet, and custom RPC endpoints at runtime.
+  </Card>
+</CardGroup>
+
+## Key features
+
+<CardGroup cols={2}>
+  <Card title="React + Mantine UI" icon="react">
+    React 18 with Mantine UI v7 gives you a full component library, theming, dark mode, and PostCSS integration out of the box.
+  </Card>
+  <Card title="Solana Wallet Adapter" icon="wallet">
+    Pre-configured wallet adapter with a Mantine UI modal. Supports Phantom, Solflare, and any Wallet Standard-compatible wallet.
+  </Card>
+  <Card title="Cluster management" icon="network-wired">
+    Switch between devnet, testnet, mainnet-beta, localnet, and custom RPC endpoints from the UI without touching code.
+  </Card>
+  <Card title="TanStack Query + Jotai" icon="database">
+    TanStack Query v5 handles server state and caching. Jotai manages global client state with a minimal, atom-based API.
+  </Card>
+  <Card title="Express API backend" icon="server">
+    An Express server running on port 3000 provides a JSON API at `/api`, serves static assets, and can be extended with feature routers.
+  </Card>
+  <Card title="Nx monorepo" icon="cubes">
+    Nx 20 coordinates the `web` and `api` projects with shared TypeScript config, caching, lint, and test targets in a single repository.
+  </Card>
+  <Card title="Docker support" icon="docker">
+    The API project includes a `docker-build` target so you can containerize and deploy the backend with a single command.
+  </Card>
+  <Card title="Anchor compatibility" icon="link">
+    The scaffold is compatible with `create-solana-dapp` generators. Add Anchor programs and on-chain tests without restructuring the project.
+  </Card>
+</CardGroup>
+
+## Prerequisites
+
+Before you start, make sure you have the following tools installed:
+
+- **Node.js** v20 or higher — [nodejs.org](https://nodejs.org)
+- **PNPM** v8 or higher — [pnpm.io](https://pnpm.io)
+- **Git** — [git-scm.com](https://git-scm.com)
+
+<Tip>
+  If you don't have PNPM installed, you can set it up with Node.js's built-in Corepack:
+
+  ```bash
+  corepack enable
+  corepack prepare pnpm@8 --activate
+  ```
+</Tip>
+
+<Warning>
+  PubKey UI is under active development. Minor and major API changes can occur at any time. Pin your dependencies and review the changelog before upgrading.
+</Warning>

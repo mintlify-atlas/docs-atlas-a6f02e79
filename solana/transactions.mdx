@@ -1,0 +1,216 @@
+---
+title: "SOL transfers, airdrops, and explorer notifications"
+description: "Use useTransferSol and useRequestAirdrop to send SOL and request devnet airdrops using VersionedTransaction and @solana/web3.js in React."
+---
+
+PubKey UI Starter includes two TanStack Query mutation hooks for moving SOL: `useRequestAirdrop` for funding a wallet on devnet or testnet, and `useTransferSol` for sending SOL from the connected wallet to any destination. Both hooks show an explorer link toast on success and automatically refresh the balance and transaction history.
+
+## `useRequestAirdrop`
+
+`useRequestAirdrop` calls the Solana faucet and waits for the transaction to be confirmed before resolving.
+
+```tsx
+import { useRequestAirdrop } from './features/account/account-data-access'
+
+function AirdropButton({ address }: { address: PublicKey }) {
+  const mutation = useRequestAirdrop({ address })
+
+  return (
+    <button
+      disabled={mutation.isPending}
+      onClick={() => mutation.mutateAsync('2')}
+    >
+      Request 2 SOL
+    </button>
+  )
+}
+```
+
+The mutation function takes an `amount` string (in SOL). Internally it calls `requestAndConfirmAirdrop`:
+
+```typescript
+async function requestAndConfirmAirdrop({
+  address,
+  amount,
+  connection,
+}: {
+  connection: Connection
+  address: PublicKey
+  amount: string
+}) {
+  const [latestBlockhash, signature] = await Promise.all([
+    connection.getLatestBlockhash(),
+    connection.requestAirdrop(address, parseFloat(amount) * LAMPORTS_PER_SOL),
+  ])
+
+  await connection.confirmTransaction({ signature, ...latestBlockhash }, 'confirmed')
+  return signature
+}
+```
+
+The airdrop request and the latest blockhash fetch are issued in parallel for efficiency. Confirmation uses the `'confirmed'` commitment level.
+
+The default amount in `ModalAirdrop` is **2 SOL**. On success, `useOnTransactionSuccess` fires and shows a clickable explorer link toast via `uiToastLink`.
+
+<Note>
+  Airdrop is only available on devnet and testnet. The **Airdrop** button is automatically disabled when `cluster.network?.includes('mainnet')` is true, so it is safe to render `AccountButtons` on any cluster.
+</Note>
+
+## `useTransferSol`
+
+`useTransferSol` builds a `VersionedTransaction`, sends it through the connected wallet, and waits for confirmation.
+
+```tsx
+import { useTransferSol } from './features/account/account-data-access'
+import { PublicKey } from '@solana/web3.js'
+
+function SendButton({ address }: { address: PublicKey }) {
+  const mutation = useTransferSol({ address })
+
+  return (
+    <button
+      onClick={() =>
+        mutation.mutateAsync({
+          destination: new PublicKey('recipient...'),
+          amount: '0.5',
+        })
+      }
+    >
+      Send 0.5 SOL
+    </button>
+  )
+}
+```
+
+### Transaction flow
+
+<Steps>
+  <Step title="Fetch the latest blockhash">
+    `createTransaction` calls `connection.getLatestBlockhash()` to get the current blockhash and `lastValidBlockHeight`.
+  </Step>
+  <Step title="Build the transfer instruction">
+    Creates a `SystemProgram.transfer` instruction from `publicKey` to `destination` for `amount * LAMPORTS_PER_SOL` lamports.
+  </Step>
+  <Step title="Compile to a legacy message">
+    Wraps the instruction in a `TransactionMessage` and calls `.compileToLegacyMessage()`.
+  </Step>
+  <Step title="Create a VersionedTransaction">
+    Passes the compiled message to `new VersionedTransaction(messageLegacy)`.
+  </Step>
+  <Step title="Send and confirm">
+    Calls `wallet.sendTransaction(transaction, connection)` to sign and broadcast, then `connection.confirmTransaction({ signature, ...latestBlockhash }, 'confirmed')` to wait for finality.
+  </Step>
+</Steps>
+
+Here is the full `createTransaction` implementation:
+
+```typescript
+export async function createTransaction({
+  publicKey,
+  destination,
+  amount,
+  connection,
+}: {
+  publicKey: PublicKey
+  destination: PublicKey
+  amount: string
+  connection: Connection
+}): Promise<{
+  transaction: VersionedTransaction
+  latestBlockhash: { blockhash: string; lastValidBlockHeight: number }
+}> {
+  // Get the latest blockhash to use in our transaction
+  const latestBlockhash = await connection.getLatestBlockhash()
+
+  // Create instructions to send, in this case a simple transfer
+  const instructions = [
+    SystemProgram.transfer({
+      fromPubkey: publicKey,
+      toPubkey: destination,
+      lamports: parseFloat(amount) * LAMPORTS_PER_SOL,
+    }),
+  ]
+
+  // Create a new TransactionMessage with version and compile it to legacy
+  const messageLegacy = new TransactionMessage({
+    payerKey: publicKey,
+    recentBlockhash: latestBlockhash.blockhash,
+    instructions,
+  }).compileToLegacyMessage()
+
+  // Create a new VersionedTransaction which supports legacy and v0
+  const transaction = new VersionedTransaction(messageLegacy)
+
+  return {
+    transaction,
+    latestBlockhash,
+  }
+}
+```
+
+<Warning>
+  `useTransferSol` only works when the connected wallet matches the `address` prop. The `ModalSend` button is disabled with `disabled={wallet.publicKey?.toString() !== address.toString()}`. If you call `mutation.mutateAsync` when the wrong wallet is connected, `wallet.sendTransaction` will fail because the wallet cannot sign for a different key.
+</Warning>
+
+## `uiToastLink`
+
+Both hooks call `uiToastLink` on success to show a Mantine notification with a clickable link to solana.fm.
+
+```typescript
+export function uiToastLink({
+  label,
+  link,
+  ...props
+}: Omit<NotificationData, 'message'> & { link: string; label: string }) {
+  return toastSuccess({
+    ...props,
+    message: (
+      <Anchor c="brand" href={link} target="_blank" rel="noopener noreferrer">
+        {label}
+      </Anchor>
+    ),
+  })
+}
+```
+
+It wraps `toastSuccess` from `@pubkey-ui/core` and injects a Mantine `Anchor` as the notification message. The link opens in a new tab. The caller provides a `link` (the full URL) and a `label` (the link text).
+
+Usage from `useOnTransactionSuccess`:
+
+```typescript
+uiToastLink({ link: getExplorerUrl(`tx/${signature}`), label: 'View Transaction' })
+```
+
+## Explorer links
+
+The `ExplorerLink` component from `cluster-ui.tsx` is a thin wrapper around `getExplorerUrl` and Mantine's `Anchor`:
+
+```tsx
+export function ExplorerLink({ path, label, ...props }: { path: string; label: string } & AnchorProps) {
+  const { getExplorerUrl } = useCluster()
+  return (
+    <Anchor href={getExplorerUrl(path)} target="_blank" rel="noopener noreferrer" {...props}>
+      {label}
+    </Anchor>
+  )
+}
+```
+
+Use it anywhere you want a link to solana.fm for the currently active cluster:
+
+```tsx
+// Link to a transaction
+<ExplorerLink path={`tx/${signature}`} label={ellipsify(signature, 8)} />
+
+// Link to an account
+<ExplorerLink path={`account/${address}`} label={ellipsify(address.toString())} />
+
+// Link to a block
+<ExplorerLink path={`block/${slot}`} label={slot.toString()} />
+```
+
+The `path` argument is appended to `https://solana.fm/` and the correct `?cluster=` parameter is added automatically based on the active cluster.
+
+<Note>
+  After every successful `useTransferSol` or `useRequestAirdrop` call, `useOnTransactionSuccess` invalidates both the `getBalance` and `getSignatures` query caches for the address. TanStack Query automatically re-fetches both queries in the background, so the SOL balance and transaction history refresh without any manual interaction.
+</Note>

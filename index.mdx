@@ -1,97 +1,69 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "PubKey UI Starter: Solana dApp scaffold with React & Mantine"
+description: "Full-stack Solana dApp scaffold combining React 18, Mantine UI, Wallet Adapter, TanStack Query, Jotai, and an Express backend in an Nx monorepo."
 ---
 
-## Setting up
+PubKey UI Starter gives you a production-ready foundation for building Solana decentralized applications. It combines a React 18 frontend styled with Mantine UI v7, full Solana wallet connectivity, multi-cluster support, and an Express API backend — all wired together in an Nx monorepo so you can start building features immediately.
 
-Get your documentation site up and running in minutes.
-
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
-
-## Make it yours
-
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Clone, install, and run your first Solana dApp in under five minutes.
   </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
+  <Card title="Project structure" icon="folder-tree" href="/project-structure">
+    Understand the Nx monorepo layout and how the web and API apps fit together.
   </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
+  <Card title="Wallet integration" icon="wallet" href="/web/wallet-integration">
+    Connect Solana wallets and interact with the blockchain from your UI.
   </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
+  <Card title="Cluster management" icon="network-wired" href="/solana/cluster-management">
+    Switch between devnet, testnet, localnet, and custom RPC endpoints.
   </Card>
-</Columns>
+</CardGroup>
 
-## Create beautiful pages
+## What's included
 
-Everything you need to create world-class documentation.
+PubKey UI Starter ships with everything you need to build a Solana dApp from day one.
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
+<CardGroup cols={2}>
+  <Card title="Web app" icon="browser" href="/web/overview">
+    React 18 + Mantine UI v7 + React Router + TanStack Query + Jotai state management.
   </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
+  <Card title="Solana features" icon="cube" href="/solana/account">
+    SOL balance, token accounts, transaction history, airdrop, and SOL transfers.
   </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
+  <Card title="API backend" icon="server" href="/api/overview">
+    Express server with JSON API, static file serving, and Docker support.
   </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
+  <Card title="Add Anchor programs" icon="link" href="/guides/adding-anchor">
+    Extend the starter with on-chain Anchor programs using create-solana-dapp generators.
   </Card>
-</Columns>
+</CardGroup>
 
-## Need inspiration?
+## Get started
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+<Steps>
+  <Step title="Clone the repository">
+    ```bash
+    git clone https://github.com/pubkeyapp/pubkey-ui-starter my-app
+    cd my-app
+    pnpm install
+    ```
+  </Step>
+  <Step title="Start the development servers">
+    Run the API and web app concurrently in separate terminals:
+    ```bash
+    pnpm dev:api   # starts Express API on port 3000
+    pnpm dev:web   # starts React app with webpack dev server
+    ```
+  </Step>
+  <Step title="Connect a wallet">
+    Open your browser, connect a Solana wallet (e.g. Phantom or Solflare), and select **devnet** from the cluster dropdown to start exploring your account.
+  </Step>
+  <Step title="Build your dApp">
+    Add your own features to `web/src/app/features/`, extend the API in `api/src/lib/features/`, or scaffold an Anchor program with `create-solana-dapp`.
+  </Step>
+</Steps>
+
+<Note>
+  PubKey UI is under active development. Minor and major API changes can occur at any time. Pin your dependencies and review the changelog when upgrading.
+</Note>

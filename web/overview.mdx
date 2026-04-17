@@ -1,0 +1,77 @@
+---
+title: "Web app overview: React, Mantine UI, and state management"
+description: "The PubKey UI Starter web app uses React 18, Mantine UI v7, TanStack Query, and Jotai atoms to build a responsive Solana dApp frontend."
+---
+
+The PubKey UI Starter web app is a React 18 single-page application that combines Mantine UI v7 for components and theming, TanStack Query v5 for server-state management, Jotai v2 for local atom-based state, and React Router v6 for client-side navigation. It is bundled with Webpack inside an Nx monorepo and connects to Solana through the Wallet Adapter libraries.
+
+## Technology stack
+
+<CardGroup cols={2}>
+  <Card title="React 18 + React DOM" icon="react">
+    Renders the UI with concurrent features enabled. `StrictMode` and `BrowserRouter` are mounted in `main.tsx` before any app-level providers.
+  </Card>
+  <Card title="Mantine UI v7" icon="palette">
+    Provides the full component library: `@mantine/core`, `@mantine/form`, `@mantine/hooks`, `@mantine/modals`, `@mantine/notifications`, and `@mantine/dates`.
+  </Card>
+  <Card title="TanStack Query v5" icon="database">
+    Manages all asynchronous server state—Solana RPC calls, token balances, and transaction history—with automatic caching and background refetching.
+  </Card>
+  <Card title="Jotai v2" icon="atom">
+    Handles lightweight client-side state via atomic signals. Used for cluster selection and other UI preferences that need to persist across renders without a full server round-trip.
+  </Card>
+</CardGroup>
+
+## Application providers
+
+All providers are composed in `web/src/app/app.tsx`. The nesting order matters: each provider can only consume context from providers above it in the tree.
+
+```tsx app.tsx
+import { UiThemeProvider } from '@pubkey-ui/core'
+import '@pubkey-ui/core/index.esm.css'
+
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { AppRoutes, ThemeLink } from './app-routes'
+import { ClusterProvider } from './features/cluster/cluster-data-access'
+import { SolanaProvider } from './features/solana/solana-provider'
+
+const client = new QueryClient()
+
+export function App() {
+  return (
+    <QueryClientProvider client={client}>
+      <UiThemeProvider link={ThemeLink}>
+        <ClusterProvider>
+          <SolanaProvider>
+            <AppRoutes />
+          </SolanaProvider>
+        </ClusterProvider>
+      </UiThemeProvider>
+    </QueryClientProvider>
+  )
+}
+```
+
+The provider stack from outermost to innermost:
+
+| Provider | Package | Role |
+|---|---|---|
+| `QueryClientProvider` | `@tanstack/react-query` | Supplies the shared `QueryClient` instance to all hooks |
+| `UiThemeProvider` | `@pubkey-ui/core` | Wraps Mantine's `MantineProvider`; receives `ThemeLink` to integrate React Router with Mantine's link components |
+| `ClusterProvider` | local | Stores the active Solana cluster (Mainnet, Devnet, Localnet) in Jotai atoms |
+| `SolanaProvider` | local | Wires up `ConnectionProvider`, `WalletProvider`, and `WalletModalProvider` using the active cluster endpoint |
+| `AppRoutes` | local | Renders the React Router route tree inside `AppLayout` |
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Routing" icon="route" href="/web/routing">
+    Learn how pages are defined with React Router v6 and how to add new routes.
+  </Card>
+  <Card title="Theming" icon="palette" href="/web/theming">
+    Customize colors, dark mode, and Mantine component defaults.
+  </Card>
+  <Card title="Wallet integration" icon="wallet" href="/web/wallet-integration">
+    Connect Solana wallets and interact with on-chain programs.
+  </Card>
+</CardGroup>
